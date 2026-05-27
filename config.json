@@ -1,0 +1,65 @@
+{
+  "_comment": "daily-news-agent 설정 파일. 관심사 키워드를 자유롭게 추가/수정하세요.",
+
+  "interests": {
+    "AI_플랫폼": [
+      "ChatGPT",
+      "GPT-5",
+      "Claude",
+      "Anthropic",
+      "Gemini",
+      "OpenAI",
+      "AI 에이전트",
+      "LLM"
+    ],
+    "마케팅_콘텐츠": [
+      "숏폼 마케팅",
+      "릴스 마케팅",
+      "틱톡 마케팅",
+      "바이럴 마케팅",
+      "콘텐츠 마케팅",
+      "유튜브 알고리즘"
+    ],
+    "크리에이터_노마드": [
+      "디지털 노마드",
+      "1인 크리에이터",
+      "유튜버 수익",
+      "콘텐츠 시장"
+    ],
+    "자동화_트렌드": [
+      "AI 자동화",
+      "워크플로우 자동화",
+      "AI 도구",
+      "n8n",
+      "Make.com"
+    ]
+  },
+
+  "rss_sources": {
+    "_comment": "구글 뉴스 RSS는 키워드 기반으로 자동 생성됩니다. 네이버는 카테고리 기반.",
+
+    "google_news_template": "https://news.google.com/rss/search?q={keyword}&hl=ko&gl=KR&ceid=KR:ko",
+
+    "static_feeds": [
+      {
+        "name": "AI타임스",
+        "url": "https://www.aitimes.com/rss/allArticle.xml"
+      },
+      {
+        "name": "디지털타임스 IT",
+        "url": "http://www.dt.co.kr/rss/rss_it.xml"
+      },
+      {
+        "name": "ZDNet Korea 인공지능",
+        "url": "https://feeds.feedburner.com/zdkorea"
+      }
+    ]
+  },
+
+  "settings": {
+    "hours_lookback": 24,
+    "max_articles_per_keyword": 3,
+    "max_final_articles": 10,
+    "dedupe_by_title": true
+  }
+}
