@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import io
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -52,10 +53,12 @@ def load_api_key() -> str:
     load_dotenv(BASE_DIR / ".env", override=True)
     key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not key or key.startswith("sk-ant-여기에"):
-        print("[오류] .env 파일에 ANTHROPIC_API_KEY 가 설정되지 않았습니다.")
+        print("[오류] ANTHROPIC_API_KEY 가 설정되지 않았습니다.")
         print(f"       1) {BASE_DIR / '.env.example'} 를 .env 로 복사")
         print(f"       2) .env 안의 키 값을 실제 API 키로 교체")
         sys.exit(1)
+    # 진단 출력 (CI 디버깅용 — 키 마스킹)
+    print(f"[진단] API 키 로드 OK — 길이={len(key)}, 시작={key[:12]!r}, 끝={key[-4:]!r}")
     return key
 
 
@@ -117,12 +120,26 @@ def score_articles(client: Anthropic, articles: list[dict], profile: str) -> lis
     )
 
     print(f"[Haiku 호출] {len(articles)}개 기사 평가 중...")
-    resp = client.messages.create(
-        model=HAIKU_MODEL,
-        max_tokens=16000,  # 기사 100개+ 대응 (이전 4000 한도 초과로 응답 잘림 이슈 해결)
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
+    # 자동 재시도 (연결 오류·일시적 네트워크 대비) — 최대 3회, 점증 대기
+    resp = None
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            resp = client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=16000,  # 기사 100개+ 대응
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            break
+        except Exception as e:
+            last_err = e
+            print(f"[재시도 {attempt}/3] {type(e).__name__}: {e}")
+            if attempt < 3:
+                time.sleep(attempt * 5)  # 5초, 10초 대기
+    if resp is None:
+        print(f"[오류] Haiku 호출 3회 모두 실패 — {type(last_err).__name__}: {last_err}")
+        sys.exit(1)
 
     raw = resp.content[0].text.strip()
     # JSON 추출 (코드블록으로 감싼 경우 대비)
@@ -218,7 +235,7 @@ def main():
     print(f"[프로파일]\n{profile}\n")
 
     # 3) Haiku 호출
-    client = Anthropic(api_key=api_key)
+    client = Anthropic(api_key=api_key, timeout=60.0, max_retries=2)
     scores = score_articles(client, articles, profile)
 
     # 4) 점수 병합 + 출력 (config 의 max_final_articles, 없으면 기본값)
