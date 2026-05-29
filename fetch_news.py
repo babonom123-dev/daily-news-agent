@@ -8,6 +8,7 @@
 """
 
 import json
+import re
 import sys
 import time
 import io
@@ -110,13 +111,26 @@ def fetch_static_feed(feed_cfg: dict, hours: int) -> list[dict]:
     return articles
 
 
+def _normalize_title(title: str) -> str:
+    """제목 정규화 — 같은 기사를 같은 키로 만들기.
+    구글 뉴스는 제목 끝에 ' - 출처명' 을 붙이고 직접 RSS 는 안 붙여서
+    글자가 미세하게 달라지므로, 출처 꼬리표 제거 + 공백·기호 제거 후 비교한다.
+    """
+    t = title.strip()
+    # 구글 뉴스가 붙이는 마지막 ' - 출처명' 제거
+    t = re.sub(r"\s*-\s*[^-]+$", "", t)
+    # 공백·따옴표·문장부호 전부 제거 (한글·영문·숫자만 남김)
+    t = re.sub(r"[^0-9A-Za-z가-힣]", "", t)
+    return t.lower()
+
+
 def dedupe_by_title(articles: list[dict]) -> list[dict]:
-    """제목 기준으로 중복 제거 (앞부분 50자 비교)"""
+    """정규화된 제목 기준으로 중복 제거 (출처 꼬리표·기호 차이 무시)"""
     seen = set()
     result = []
     for a in articles:
-        key = a["title"][:50]
-        if key in seen:
+        key = _normalize_title(a["title"])
+        if not key or key in seen:
             continue
         seen.add(key)
         result.append(a)
