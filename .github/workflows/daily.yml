@@ -11,6 +11,13 @@ on:
     - cron: '17 9 * * *'    # 18:17 KST
   workflow_dispatch:        # 수동 실행 버튼
 
+# 실행 직렬화 — 한 번에 하나만 돌게 강제.
+# cron 슬롯이 지연돼 여러 개가 몰려도, 두 번째는 첫 번째가 끝날 때까지(=마커 푸시까지)
+# 대기했다가 시작 → 그 시점에 .last_sent 마커를 보고 스킵 → 중복 발송 원천 차단.
+concurrency:
+  group: daily-news-send
+  cancel-in-progress: false
+
 permissions:
   contents: write           # 발송 마커(.last_sent) 커밋용
 
