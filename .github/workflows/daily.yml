@@ -1,11 +1,18 @@
 name: Daily News Agent
 
-# 매일 한국시간 12:17 (UTC 03:17) 자동 실행 + 수동 실행 버튼
-# (정각 :00 은 전세계 cron 몰려 지연 심함 → :17 로 분산)
+# GitHub 단독 자동 발송 (PC 무관).
+# GitHub cron 은 슬롯을 스킵할 수 있으므로, 하루 여러 시각에 시도하고
+# '오늘 이미 보냄' 마커로 중복 발송을 막는다 → 하루 딱 1통 보장.
 on:
   schedule:
-    - cron: '17 3 * * *'   # 12:17 KST (백업용 — 주력은 Windows 스케줄러 12:00)
-  workflow_dispatch:       # GitHub UI 에서 수동 실행 가능
+    - cron: '17 3 * * *'    # 12:17 KST
+    - cron: '17 5 * * *'    # 14:17 KST
+    - cron: '17 7 * * *'    # 16:17 KST
+    - cron: '17 9 * * *'    # 18:17 KST
+  workflow_dispatch:        # 수동 실행 버튼
+
+permissions:
+  contents: write           # 발송 마커(.last_sent) 커밋용
 
 jobs:
   send-news:
@@ -16,29 +23,59 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: 오늘 이미 보냈는지 확인 (KST 기준)
+        id: guard
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +%F)
+          LAST=$(cat .last_sent 2>/dev/null || echo "none")
+          echo "today=$TODAY" >> "$GITHUB_OUTPUT"
+          if [ "$LAST" = "$TODAY" ]; then
+            echo "이미 오늘($TODAY) 발송됨 → 이번 슬롯은 건너뜀"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "오늘($TODAY) 첫 실행 → 발송 진행"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Python 3.11
+        if: steps.guard.outputs.skip == 'false'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip == 'false'
         run: pip install -r requirements.txt
 
-      - name: Fetch news (RSS 수집)
+      - name: Fetch news
+        if: steps.guard.outputs.skip == 'false'
         env:
           PYTHONIOENCODING: utf-8
         run: python fetch_news.py
 
-      - name: Filter news (Claude Haiku 점수)
+      - name: Filter news
+        if: steps.guard.outputs.skip == 'false'
         env:
           PYTHONIOENCODING: utf-8
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python filter_news.py
 
-      - name: Send email (Gmail SMTP 발송)
+      - name: Send email
+        if: steps.guard.outputs.skip == 'false'
         env:
           PYTHONIOENCODING: utf-8
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python send_email.py
+
+      - name: 발송 성공 마커 기록 (중복 방지)
+        if: steps.guard.outputs.skip == 'false' && success()
+        run: |
+          echo "${{ steps.guard.outputs.today }}" > .last_sent
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last_sent
+          git commit -m "sent ${{ steps.guard.outputs.today }}" || exit 0
+          git pull --rebase --autostash || true
+          git push
