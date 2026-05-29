@@ -1,9 +1,10 @@
 name: Daily News Agent
 
-# 매일 한국시간 12:00 (UTC 03:00) 자동 실행 + 수동 실행 버튼
+# 매일 한국시간 12:17 (UTC 03:17) 자동 실행 + 수동 실행 버튼
+# (정각 :00 은 전세계 cron 몰려 지연 심함 → :17 로 분산)
 on:
   schedule:
-    - cron: '0 3 * * *'   # 12:00 KST
+    - cron: '17 3 * * *'   # 12:17 KST (백업용 — 주력은 Windows 스케줄러 12:00)
   workflow_dispatch:       # GitHub UI 에서 수동 실행 가능
 
 jobs:
